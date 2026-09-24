@@ -54,6 +54,12 @@ print(power_to_power["season"].value_counts().sort_index())
 print("\nPower to Power players by season and position:")
 print(pd.crosstab(power_to_power["season"], power_to_power["position"]))
 
+print("\nPower to Power missing values for key metrics:")
+print(power_to_power[["usage_overall", "avgPPA_all"]].isna().sum())
+
+print("\nPower to Power available values for key metrics:")
+print(power_to_power[["usage_overall", "avgPPA_all"]].notna().sum())
+
 #Power to Non-Power
 power_to_non_power = df[df["transfer_direction"] == "P->NP"].copy()
 
@@ -71,3 +77,9 @@ print(power_to_non_power["season"].value_counts().sort_index())
 
 print("\nPower to Non-Power players by season and position:")
 print(pd.crosstab(power_to_non_power["season"], power_to_non_power["position"]))
+
+print("\nPower to Non-Power missing values for key metrics:")
+print(power_to_non_power[["usage_overall", "avgPPA_all"]].isna().sum())
+
+print("\nPower to Non-Power available values for key metrics:")
+print(power_to_non_power[["usage_overall", "avgPPA_all"]].notna().sum())
