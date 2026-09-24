@@ -2,6 +2,8 @@ import pandas as pd
 
 df = pd.read_excel("data/transfers_2021_2025 1.xlsx", sheet_name="All")
 
+# Non-Power to Power
+
 print(df.shape)
 print(df.head())
 
@@ -34,3 +36,38 @@ print(np_to_power[["usage_overall", "avgPPA_all"]].isna().sum())
 print("\nAvailable values for key metrics:")
 print(np_to_power[["usage_overall", "avgPPA_all"]].notna().sum())
 
+#Power to Power
+power_to_power = df[df["transfer_direction"] == "P->P"].copy()
+
+print("\nPower to Power rows:")
+print(power_to_power.shape)
+
+print("\nUnique Power to Power players:")
+print(power_to_power["id"].nunique())
+
+print("\nPower to Power players by position:")
+print(power_to_power["position"].value_counts())
+
+print("\nPower to Power players by season:")
+print(power_to_power["season"].value_counts().sort_index())
+
+print("\nPower to Power players by season and position:")
+print(pd.crosstab(power_to_power["season"], power_to_power["position"]))
+
+#Power to Non-Power
+power_to_non_power = df[df["transfer_direction"] == "P->NP"].copy()
+
+print("\nPower to Non-Power rows:")
+print(power_to_non_power.shape)
+
+print("\nUnique Power to Non-Power players:")
+print(power_to_non_power["id"].nunique())
+
+print("\nPower to Non-Power players by position:")
+print(power_to_non_power["position"].value_counts())
+
+print("\nPower to Non-Power players by season:")
+print(power_to_non_power["season"].value_counts().sort_index())
+
+print("\nPower to Non-Power players by season and position:")
+print(pd.crosstab(power_to_non_power["season"], power_to_non_power["position"]))
