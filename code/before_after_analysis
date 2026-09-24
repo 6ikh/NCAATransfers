@@ -1,0 +1,109 @@
+import pandas as pd
+
+df = pd.read_excel("data/transfers_2021_2025 1.xlsx", sheet_name="All")
+
+np_to_power = df[df["transfer_direction"] == "NP->P"].copy()
+
+print("NP to Power transfers:")
+print(np_to_power.shape)
+
+np_to_power["previous_season"] = np_to_power["season"] - 1
+
+print("\nTransfer season and previous season:")
+print(np_to_power[["name", "season", "previous_season", "prev_team", "team"]].head(10))
+
+before_stats = df[
+    ["id", "season", "team", "usage_overall", "avgPPA_all"]
+].copy()
+
+before_stats = before_stats.rename(columns={
+    "season": "previous_season",
+    "team": "before_team",
+    "usage_overall": "usage_before",
+    "avgPPA_all": "ppa_before"
+})
+
+print("\nPrevious-season data:")
+print(before_stats.head())
+
+before_after = np_to_power.merge(
+    before_stats,
+    on=["id", "previous_season"],
+    how="left"
+)
+
+print("\nBefore and after sample:")
+print(
+    before_after[
+        [
+            "name",
+            "prev_team",
+            "team",
+            "previous_season",
+            "usage_before",
+            "usage_overall",
+            "ppa_before",
+            "avgPPA_all"
+        ]
+    ].head(10)
+)
+
+before_after["team_match"] = before_after["before_team"] == before_after["prev_team"]
+
+print("\nPrevious team matches:")
+print(before_after["team_match"].value_counts())
+
+valid_matches = before_after[before_after["team_match"]].copy()
+
+print("\nValidated before/after matches:")
+print(len(valid_matches))
+
+valid_matches["usage_change"] = (
+    valid_matches["usage_overall"] - valid_matches["usage_before"]
+)
+
+valid_matches["ppa_change"] = (
+    valid_matches["avgPPA_all"] - valid_matches["ppa_before"]
+)
+
+print("\nBefore/after changes:")
+print(
+    valid_matches[
+        [
+            "name",
+            "position",
+            "prev_team",
+            "team",
+            "usage_before",
+            "usage_overall",
+            "usage_change",
+            "ppa_before",
+            "avgPPA_all",
+            "ppa_change"
+        ]
+    ].head(10)
+)
+
+output = valid_matches[
+    [
+        "name",
+        "position",
+        "prev_team",
+        "team",
+        "previous_season",
+        "season",
+        "usage_before",
+        "usage_overall",
+        "usage_change",
+        "ppa_before",
+        "avgPPA_all",
+        "ppa_change"
+    ]
+]
+
+output.to_excel(
+    "data/np_to_power_before_after.xlsx",
+    index=False
+)
+
+print("\nExcel file created.")
