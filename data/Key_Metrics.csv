@@ -1,0 +1,5 @@
+﻿Position,Role / Workload,Production,Efficiency,Scoring,Advanced Efficiency
+QB,Pass Attempts,Passing Yards,Yards per Attempt,Passing TDs,Adjusted PPA
+RB,Rush Attempts,Rushing Yards,Yards per Carry,Rushing TDs,Adjusted PPA
+WR,Receptions,Receiving Yards,Yards per Reception,Receiving TDs,Adjusted PPA
+TE,Receptions,Receiving Yards,Yards per Reception,Receiving TDs,Adjusted PPA
