@@ -230,19 +230,23 @@ def render_position(position):
     before_mean = selected[f"{stat}_before"].mean()
     after_mean = selected[stat].mean()
     mean_decimals = max(decimals, 1)
+    mean_change = after_mean - before_mean
     improved_pct = (
         selected[stat] > selected[f"{stat}_before"]
     ).mean() * 100
+    
 
     # Summary numbers above the chart
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Players", len(selected))
     m2.metric(f"Avg {stat_name} before", f"{before_mean:.{mean_decimals}f}")
     m3.metric(
         f"Avg {stat_name} after", f"{after_mean:.{mean_decimals}f}",
         delta=f"{after_mean - before_mean:+.{mean_decimals}f}",
     )
-    m4.metric(f"% Improved {stat_name}", f"{improved_pct:.1f}%")
+    m4.metric(f"Change in Avg {stat_name}",
+              f"{mean_change:+.{mean_decimals}f}")
+    m5.metric(f"% Improved {stat_name}", f"{improved_pct:.1f}%")
 
     st.plotly_chart(
         slope_chart(selected, stat, stat_name, decimals), width="stretch", key=f"chart_{position}"
