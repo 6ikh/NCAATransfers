@@ -202,10 +202,20 @@ with side2:
         key="to_confs",
     )
 
+# Transfer year filter
+years = sorted(pairs["season"].dropna().unique())
+selected_years = st.multiselect(
+    "Transfer year",
+    years,
+    default=years,
+)    
+
+
 # Keep only transfers between the selected conferences
 filtered = pairs[
     pairs["conf_label_before"].isin(from_confs)
     & pairs["conf_label"].isin(to_confs)
+    & pairs["season"].isin(selected_years)
 ]
 
 
