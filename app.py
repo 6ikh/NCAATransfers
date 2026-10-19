@@ -236,6 +236,7 @@ def render_position(position):
         st.info(f"No {POSITION_TABS[position].lower()} match these conferences.")
         return
 
+    change = selected[stat] - selected[f"{stat}_before"]
     before_mean = selected[f"{stat}_before"].mean()
     after_mean = selected[stat].mean()
     mean_decimals = max(decimals, 1)
@@ -261,7 +262,18 @@ def render_position(position):
         slope_chart(selected, stat, stat_name, decimals), width="stretch", key=f"chart_{position}"
     )
 
-
+    # Show the distribution of change for the selected metric
+    hist_fig = go.Figure(data=[go.Histogram(x=change, nbinsx=20)])
+    hist_fig.add_vline(x=0, line_dash="dash", line_color="red")
+    hist_fig.update_layout(
+        title=f"Distribution of {stat_name} Change",
+        xaxis_title=f"Change in {stat_name} (after - before)",
+        yaxis_title="Number of players",
+    )
+    st.plotly_chart(
+        hist_fig, width="stretch", key=f"hist_{position}"
+    )
+    
 # One tab per position
 for tab, position in zip(st.tabs(list(POSITION_TABS.values())), POSITION_TABS):
     with tab:
