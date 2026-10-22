@@ -173,8 +173,8 @@ def slope_chart(data, stat, stat_name, decimals):
     )
     return fig
 
-def rb_improvement_chart(data, stat, stat_name):
-    """Compare RB improvement percentages across transfer directions."""
+def improvement_chart(data, stat, stat_name):
+    """Compare improvement percentages across transfer directions."""
 
     directions = ["NP->P", "P->P", "P->NP"]
     labels = ["NP → P", "P → P", "P → NP"]
@@ -183,7 +183,7 @@ def rb_improvement_chart(data, stat, stat_name):
 
     for direction, label in zip(directions, labels):
 
-        # Filter running backs by transfer direction
+        # Filter by transfer direction
         group = data[data["transfer_direction"] == direction]
 
         if group.empty:
@@ -240,11 +240,11 @@ def rb_improvement_chart(data, stat, stat_name):
         ))
 
     fig.update_layout(
-        title=f"How RBs Perform After Transferring: {stat_name}",
+        title=f"How Players Perform After Transferring: {stat_name}",
         barmode="stack",
         height=380,
         xaxis=dict(
-            title="Percentage of Running Backs",
+            title="Percentage of Players",
             range=[0, 100],
             ticksuffix="%"
         ),
@@ -269,18 +269,41 @@ def rb_improvement_chart(data, stat, stat_name):
 
     return fig
 
-def rb_performance_chart(data):
-    """Show average RB performance changes across transfer directions."""
+def performance_chart(data, positiion):
+    """Show average performance changes across transfer directions."""
 
     from plotly.subplots import make_subplots
 
-    metrics = [
+    metrics = {
+    "QB": [
+        ("passing_ATT", "Pass Attempts", 1),
+        ("passing_YDS", "Passing Yards", 1),
+        ("passing_YPA", "Yards per Attempt", 2),
+        ("passing_TD", "Passing Touchdowns", 1),
+        ("adjPPA", "Adjusted PPA", 3),
+    ],
+    "RB": [
         ("rushing_CAR", "Rushing Attempts", 1),
         ("rushing_YDS", "Rushing Yards", 1),
         ("rushing_YPC", "Yards per Carry", 2),
         ("rushing_TD", "Rushing Touchdowns", 1),
         ("adjPPA", "Adjusted PPA", 3),
-    ]
+    ],
+    "WR": [
+        ("receiving_REC", "Receptions", 1),
+        ("receiving_YDS", "Receiving Yards", 1),
+        ("receiving_YPR", "Yards per Reception", 2),
+        ("receiving_TD", "Receiving Touchdowns", 1),
+        ("adjPPA", "Adjusted PPA", 3),
+    ],
+    "TE": [
+        ("receiving_REC", "Receptions", 1),
+        ("receiving_YDS", "Receiving Yards", 1),
+        ("receiving_YPR", "Yards per Reception", 2),
+        ("receiving_TD", "Receiving Touchdowns", 1),
+        ("adjPPA", "Adjusted PPA", 3),
+    ],
+}[position]
 
     directions = [
         ("NP->P", "NP → P"),
@@ -359,7 +382,7 @@ def rb_performance_chart(data):
 
     fig.update_layout(
         title=dict(
-            text="Average RB Performance Changes After Transferring",
+            text=f"Average {position} Performance Changes After Transferring",
             font=dict(size=23),
             x=0.5,
             xanchor="center",
@@ -507,32 +530,28 @@ def render_position(position):
     # Display the bar chart in Streamlit
     st.plotly_chart(fig_dir,width="stretch", key=f"hist_{position}_direction")
         # Additional visualization for running backs only
-    if position == "RB":
-        st.divider()
+    st.divider()
+    st.subheader("Improvement vs. Decline")
 
+    fig = improvement_chart(selected, stat, stat_name)
 
-        fig = rb_improvement_chart(selected, stat, stat_name)
-
-        if fig is not None:
-            st.plotly_chart(
-                fig,
-                width="stretch",
-                key="rb_improvement_chart"
-            )
-        else:
-            st.info("No running backs match the selected transfer directions.")
-
-        st.divider()
-
-        st.subheader("RB Performance by Metric")
-
+    if fig is not None:
         st.plotly_chart(
-            rb_performance_chart(
-                filtered[filtered["position"] == "RB"]
-            ),
+            fig,
             width="stretch",
-            key="rb_performance_chart"
-        )
+            key=f"improvement_chart_{position}"
+       )
+    else:
+     st.info("No players match the selected filters.")
+
+    st.divider()
+    st.subheader("Performance by Metric")
+
+    st.plotly_chart(
+        performance_chart(selected, position),
+        width="stretch",
+        key=f"performance_chart_{position}"
+    )
 
 
 # One tab per position
