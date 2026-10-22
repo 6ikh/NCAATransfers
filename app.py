@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
 # browser tab title and full-width layout
@@ -273,7 +274,35 @@ def render_position(position):
     st.plotly_chart(
         hist_fig, width="stretch", key=f"hist_{position}"
     )
-    
+    #Parm -- Average Performance Change by Transfer Direction (position)
+    if not filtered.empty:
+        # Further filter the data to include only rows for the selected position
+        position_filtered = filtered[filtered["position"] == position]
+        if not position_filtered.empty:
+             # Calculate the change in adjusted PPA (adjPPA) for each row
+            position_filtered["adjPPA_change"] = position_filtered["adjPPA"] - position_filtered["adjPPA_before"]
+            # Group the data by transfer direction and calculate the average adjPPA change for each group
+            avg_ppa_dir = (
+                position_filtered.groupby("transfer_direction")["adjPPA_change"].mean().reset_index()
+                )
+    # Define selected_position
+    selected_position = position
+    st.subheader(f"Average Performance Change by Transfer Direction ({POSITION_TABS[selected_position]})")
+    fig_dir = px.bar(
+        avg_ppa_dir,
+        x="transfer_direction",
+        y="adjPPA_change",
+        labels={
+            "transfer_direction": "Transfer Direction",
+            "adjPPA_change": "Average adjPPA Change",
+        },
+        color="transfer_direction",
+    )
+    # Remove legend from the bar chart
+    fig_dir.update_layout(showlegend=False)
+    # Display the bar chart in Streamlit
+    st.plotly_chart(fig_dir,width="stretch", key=f"hist_{position}_direction")
+
 # One tab per position
 for tab, position in zip(st.tabs(list(POSITION_TABS.values())), POSITION_TABS):
     with tab:
