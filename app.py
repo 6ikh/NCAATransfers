@@ -173,7 +173,211 @@ def slope_chart(data, stat, stat_name, decimals):
     )
     return fig
 
+def rb_improvement_chart(data, stat, stat_name):
+    """Compare RB improvement percentages across transfer directions."""
 
+    directions = ["NP->P", "P->P", "P->NP"]
+    labels = ["NP → P", "P → P", "P → NP"]
+
+    results = []
+
+    for direction, label in zip(directions, labels):
+
+        # Filter running backs by transfer direction
+        group = data[data["transfer_direction"] == direction]
+
+        if group.empty:
+            continue
+
+        # Calculate each player's performance change
+        changes = group[stat] - group[f"{stat}_before"]
+
+        improved = (changes > 0).sum()
+        declined = (changes < 0).sum()
+        unchanged = (changes == 0).sum()
+
+        total = len(group)
+
+        results.append({
+            "Direction": label,
+            "Improved": improved / total * 100,
+            "Declined": declined / total * 100,
+            "Unchanged": unchanged / total * 100,
+            "Players": total
+        })
+
+    if not results:
+        return None
+
+    results = pd.DataFrame(results)
+
+    fig = go.Figure()
+
+    categories = [
+        ("Declined", "#E63946"),
+        ("Unchanged", "#9CA3AF"),
+        ("Improved", "#16A34A")
+    ]
+
+    for category, color in categories:
+
+        fig.add_trace(go.Bar(
+    y=[
+        f"{direction} (n={players})"
+        for direction, players in zip(results["Direction"], results["Players"])
+    ],
+    x=results[category],
+            name=category,
+            orientation="h",
+            marker_color=color,
+            text=[f"{v:.1f}%" if v >= 5 else "" for v in results[category]],
+            textposition="inside",
+            hovertemplate=(
+                "%{y}<br>"
+                + category + ": %{x:.1f}%"
+                + "<extra></extra>"
+            )
+        ))
+
+    fig.update_layout(
+        title=f"How RBs Perform After Transferring: {stat_name}",
+        barmode="stack",
+        height=380,
+        xaxis=dict(
+            title="Percentage of Running Backs",
+            range=[0, 100],
+            ticksuffix="%"
+        ),
+        yaxis=dict(
+            title="",
+            categoryorder="array",
+            categoryarray=[
+    f"{direction} (n={players})"
+    for direction, players in zip(
+        results["Direction"][::-1],
+        results["Players"][::-1]
+    )
+]
+        ),
+        legend=dict(
+            orientation="h",
+            y=1.12,
+            x=0
+        ),
+        margin=dict(l=40, r=30, t=90, b=50)
+    )
+
+    return fig
+
+def rb_performance_chart(data):
+    """Show average RB performance changes across transfer directions."""
+
+    from plotly.subplots import make_subplots
+
+    metrics = [
+        ("rushing_CAR", "Rushing Attempts", 1),
+        ("rushing_YDS", "Rushing Yards", 1),
+        ("rushing_YPC", "Yards per Carry", 2),
+        ("rushing_TD", "Rushing Touchdowns", 1),
+        ("adjPPA", "Adjusted PPA", 3),
+    ]
+
+    directions = [
+        ("NP->P", "NP → P"),
+        ("P->P", "P → P"),
+        ("P->NP", "P → NP"),
+    ]
+
+    fig = make_subplots(
+        rows=5,
+        cols=1,
+        subplot_titles=[metric[1] for metric in metrics],
+        vertical_spacing=0.10,
+    )
+
+    for row_num, (stat, label, decimals) in enumerate(metrics, 1):
+
+        for direction, direction_label in directions:
+
+            group = data[
+                data["transfer_direction"] == direction
+            ].dropna(subset=[stat, f"{stat}_before"])
+
+            if group.empty:
+                continue
+
+            change = (
+                group[stat] - group[f"{stat}_before"]
+            ).mean()
+
+            color = "#16A34A" if change > 0 else "#E63946"
+
+            fig.add_trace(
+                go.Bar(
+                    x=[change],
+                    y=[direction_label],
+                    orientation="h",
+                    marker_color=color,
+                    marker_line_width=0,
+                    width=0.45,
+                    text=[f"{change:+.{decimals}f}"],
+                    textposition="outside",
+                    cliponaxis=False,
+                    showlegend=False,
+                    hovertemplate=(
+                        f"<b>{direction_label}</b><br>"
+                        f"{label}: %{{x:+.{decimals}f}}<br>"
+                        f"Players: {len(group)}"
+                        "<extra></extra>"
+                    ),
+                ),
+                row=row_num,
+                col=1,
+            )
+
+        fig.add_vline(
+            x=0,
+            line_color="#888888",
+            line_width=1,
+            row=row_num,
+            col=1,
+        )
+
+        fig.update_yaxes(
+            categoryorder="array",
+            categoryarray=["P → NP", "P → P", "NP → P"],
+            row=row_num,
+            col=1,
+        )
+
+        fig.update_xaxes(
+            zeroline=False,
+            showgrid=False,
+            row=row_num,
+            col=1,
+        )
+
+    fig.update_layout(
+        title=dict(
+            text="Average RB Performance Changes After Transferring",
+            font=dict(size=23),
+            x=0.5,
+            xanchor="center",
+        ),
+        height=950,
+        bargap=0.35,
+        margin=dict(l=90, r=100, t=100, b=35),
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=13),
+    )
+
+    fig.update_annotations(
+        font=dict(size=16, color="white")
+    )
+
+    return fig
 st.title("NCAA Transfer Portal")
 
 pairs = load_transfers()
@@ -302,6 +506,34 @@ def render_position(position):
     fig_dir.update_layout(showlegend=False)
     # Display the bar chart in Streamlit
     st.plotly_chart(fig_dir,width="stretch", key=f"hist_{position}_direction")
+        # Additional visualization for running backs only
+    if position == "RB":
+        st.divider()
+
+
+        fig = rb_improvement_chart(selected, stat, stat_name)
+
+        if fig is not None:
+            st.plotly_chart(
+                fig,
+                width="stretch",
+                key="rb_improvement_chart"
+            )
+        else:
+            st.info("No running backs match the selected transfer directions.")
+
+        st.divider()
+
+        st.subheader("RB Performance by Metric")
+
+        st.plotly_chart(
+            rb_performance_chart(
+                filtered[filtered["position"] == "RB"]
+            ),
+            width="stretch",
+            key="rb_performance_chart"
+        )
+
 
 # One tab per position
 for tab, position in zip(st.tabs(list(POSITION_TABS.values())), POSITION_TABS):
