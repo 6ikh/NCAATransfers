@@ -506,22 +506,23 @@ def render_position(position):
         # Further filter the data to include only rows for the selected position
         position_filtered = filtered[filtered["position"] == position]
         if not position_filtered.empty:
-             # Calculate the change in adjusted PPA (adjPPA) for each row
-            position_filtered["adjPPA_change"] = position_filtered["adjPPA"] - position_filtered["adjPPA_before"]
+            # Calculate the change in adjusted PPA (adjPPA) for each row
+            # position_filtered["adjPPA_change"] = position_filtered["adjPPA"] - position_filtered["adjPPA_before"]
+            position_filtered["stat_change"] = position_filtered[stat] - position_filtered[f"{stat}_before"]
             # Group the data by transfer direction and calculate the average adjPPA change for each group
-            avg_ppa_dir = (
-                position_filtered.groupby("transfer_direction")["adjPPA_change"].mean().reset_index()
+            avg_stat_dir = (
+                position_filtered.groupby("transfer_direction")["stat_change"].mean().reset_index()
                 )
     # Define selected_position
     selected_position = position
     st.subheader(f"Average Performance Change by Transfer Direction ({POSITION_TABS[selected_position]})")
     fig_dir = px.bar(
-        avg_ppa_dir,
+        avg_stat_dir,
         x="transfer_direction",
-        y="adjPPA_change",
+        y="stat_change",
         labels={
             "transfer_direction": "Transfer Direction",
-            "adjPPA_change": "Average adjPPA Change",
+            "stat_change": f"Average {stat_name} Change",
         },
         color="transfer_direction",
     )
