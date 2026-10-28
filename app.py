@@ -554,7 +554,56 @@ def render_position(position):
     )
 
 
-# One tab per position
-for tab, position in zip(st.tabs(list(POSITION_TABS.values())), POSITION_TABS):
+# Position tabs plus a glossary tab
+tabs = st.tabs([*POSITION_TABS.values(), "Glossary"])
+
+for tab, position in zip(tabs[:-1], POSITION_TABS):
     with tab:
         render_position(position)
+
+with tabs[-1]:
+    st.header("Glossary")
+    st.subheader("1. Performance Metrics")
+    st.markdown("""
+    | Metric | Definition |
+    | --- | --- |
+    | **Role / Workload** | Measures how often a player is involved in the offense. |
+    | **Production** | Measures the total yards a player produces during a season. |
+    | **Efficiency** | Measures yards gained per passing attempt, rushing attempt, or reception. |
+    | **Scoring** | Measures touchdowns produced by the player. |
+    | **Advanced Efficiency** | Uses PPA-based statistics to measure performance beyond traditional box-score statistics. |
+    """)
+
+    st.subheader("2. Metrics by Position")
+    st.markdown("""
+    The same metric category uses a different statistic depending on the player's position.
+
+    | Position | Workload | Production | Efficiency | Scoring |
+    | --- | --- | --- | --- | --- |
+    | **QB** | Pass Attempts | Passing Yards | Yards per Attempt | Passing TDs |
+    | **RB** | Rush Attempts | Rushing Yards | Yards per Carry | Rushing TDs |
+    | **WR** | Receptions | Receiving Yards | Yards per Reception | Receiving TDs |
+    | **TE** | Receptions | Receiving Yards | Yards per Reception | Receiving TDs |
+    """)
+    st.markdown(
+        "All positions also include **Adjusted PPA**"
+    )
+
+    st.subheader("3. Understanding the Dashboard")
+    st.markdown("""
+    | Term | Explanation |
+    | --- | --- |
+    | **Before Transfer** | Player's final recorded season at their previous school. |
+    | **After Transfer** | Player's first recorded season at their new school. |
+    | **Change** | After − Before. |
+    | **% Improved** | Percentage of players whose selected metric increased. |
+    | **Number of Players** | Number of players included in the current selection. |
+    | **Transfer Year** | Season associated with the player's transfer. |
+    """)
+
+    st.subheader("4. Data & Limitations")
+    st.markdown("""
+    - **Data source:** [College Football Data](https://collegefootballdata.com/)
+    - **Time period:** 2021–2025
+    - **Limitations:** Some players have missing statistics or limited playing time. """
+    )
