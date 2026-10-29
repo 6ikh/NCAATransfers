@@ -888,13 +888,13 @@ def metrics_page():
     ]
 
     # One tab per position plus the leaderboard
-    tabs = st.tabs([*POSITION_TABS.values(), "Leaderboard"])
+    tabs = st.tabs(["Leaderboard", *POSITION_TABS.values()])
 
-    for tab, position in zip(tabs[:4], POSITION_TABS):
+    for tab, position in zip(tabs[1:5], POSITION_TABS):
         with tab:
             render_position(position, filtered)
 
-    with tabs[4]:
+    with tabs[0]:
         render_leaderboard(filtered)
 
 
