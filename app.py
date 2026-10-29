@@ -815,12 +815,31 @@ def render_leaderboard(filtered):
             range(1, len(display_data) + 1)
         )
 
+        # Get the selected statistic's display name
+        stat_label = next(
+            metric[1]
+            for metric in leaderboard_metrics
+            if metric[0] == leaderboard_stat
+        )
+
+        # Use shorter labels for the table
+        stat_short = {
+            "passing_YPA": "YPA",
+            "rushing_YPC": "YPC",
+            "receiving_YPR": "YPR",
+            "adjPPA": "Adj. PPA",
+        }.get(leaderboard_stat, stat_label)
+
+        before_label = f"Before {stat_short}"
+        after_label = f"After {stat_short}"
+        change_label = f"{stat_short} Change"
+
         display_data.columns = [
             "Rank", "Player", "Position", "Previous School",
-            "New School", "Before", "After", "Change"
+            "New School", before_label, after_label, change_label
         ]
 
-                # Format and color-code the performance change
+        # Format and color-code the performance change
         def style_change(value):
             if value > 0:
                 return "color: #4ADE80; font-weight: bold"
@@ -830,11 +849,11 @@ def render_leaderboard(filtered):
 
         styled_data = display_data.style.map(
             style_change,
-            subset=["Change"]
+            subset=[change_label]
         ).format({
-            "Before": f"{{:.{decimals}f}}",
-            "After": f"{{:.{decimals}f}}",
-            "Change": f"{{:+.{decimals}f}}",
+            before_label: f"{{:.{decimals}f}}",
+            after_label: f"{{:.{decimals}f}}",
+            change_label: f"{{:+.{decimals}f}}",
         })
 
         st.dataframe(
