@@ -108,6 +108,32 @@ def power_split(labels_with_power):
     non_power = sorted({lbl for lbl, p in labels_with_power if p != "Y"})
     return non_power, power
 
+def conference_filter(label, non_power, power, key):
+    """Select all, power, non-power, or individual conferences."""
+
+    selection = st.radio(
+        label,
+        ["All Conferences", "Power (P)", "Non-Power (NP)", "Custom"],
+        horizontal=True,
+        key=f"{key}_group"
+    )
+
+    if selection == "All Conferences":
+        return non_power + power
+
+    if selection == "Power (P)":
+        return power
+
+    if selection == "Non-Power (NP)":
+        return non_power
+
+    return st.multiselect(
+        "Select individual conferences",
+        options=non_power + power,
+        default=non_power + power,
+        key=f"{key}_custom"
+    )
+
 
 def slope_chart(data, stat, stat_name, decimals):
     """line per player from their before value to their after value"""
@@ -1118,25 +1144,27 @@ def metrics_page():
     non_power_from, power_from = power_split(zip(pairs["conf_label_before"], pairs["power_conf_before"]))
     non_power_to, power_to = power_split(zip(pairs["conf_label"], pairs["power_conf"]))
 
-    # Two conference pickers side by side
+        # Two conference filters side by side
     side1, side2 = st.columns(2)
+
     with side1:
-        # default to non-power conferences
         st.subheader("Transferred from")
-        from_confs = st.multiselect(
+
+        from_confs = conference_filter(
             "Conferences before transfer",
-            non_power_from + power_from,
-            default=non_power_from,
-            key="from_confs",
+            non_power_from,
+            power_from,
+            "from_confs"
         )
+
     with side2:
-        # defaults to power conference
         st.subheader("Transferred to")
-        to_confs = st.multiselect(
+
+        to_confs = conference_filter(
             "Conferences after transfer",
-            non_power_to + power_to,
-            default=power_to,
-            key="to_confs",
+            non_power_to,
+            power_to,
+            "to_confs"
         )
 
     # transfer year filter
