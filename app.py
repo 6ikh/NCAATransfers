@@ -269,7 +269,7 @@ def improvement_chart(data, stat, stat_name):
 
     return fig
 
-def performance_chart(data, positiion):
+def performance_chart(data, position):
     """Show average performance changes across transfer directions."""
 
     from plotly.subplots import make_subplots
@@ -401,6 +401,64 @@ def performance_chart(data, positiion):
     )
 
     return fig
+
+def transfer_leaderboard(data, stat):
+    """Find the biggest improvements and declines after transferring."""
+
+    leaderboard = data.copy()
+
+    before_col = f"{stat}_before"
+
+    # Only include players with valid before-and-after data
+    leaderboard = leaderboard.dropna(
+        subset=[stat, before_col]
+    ).copy()
+
+    # Calculate performance change
+    leaderboard["Change"] = (
+        leaderboard[stat] - leaderboard[before_col]
+    )
+
+    # Only include players whose performance improved
+    most_improved = (
+        leaderboard[leaderboard["Change"] > 0]
+        .sort_values("Change", ascending=False)
+        .head(10)
+    )
+
+    # Only include players whose performance declined
+    biggest_declines = (
+        leaderboard[leaderboard["Change"] < 0]
+        .sort_values("Change", ascending=True)
+        .head(10)
+    )
+
+    return most_improved, biggest_declines
+
+def apply_workload_requirements(data):
+    """Keep players with enough opportunities in both seasons."""
+
+    requirements = {
+        "QB": ("passing_ATT", 100),
+        "RB": ("rushing_CAR", 50),
+        "WR": ("receiving_REC", 20),
+        "TE": ("receiving_REC", 10),
+    }
+
+    eligible_groups = []
+
+    for position, (column, minimum) in requirements.items():
+        group = data[data["position"] == position].copy()
+
+        group = group[
+            (group[column] >= minimum)
+            & (group[f"{column}_before"] >= minimum)
+        ]
+
+        eligible_groups.append(group)
+
+    return pd.concat(eligible_groups, ignore_index=True)
+
 st.title("NCAA Transfer Portal")
 
 pairs = load_transfers()
@@ -554,15 +612,282 @@ def render_position(position):
         key=f"performance_chart_{position}"
     )
 
-
 # Position tabs plus a glossary tab
-tabs = st.tabs([*POSITION_TABS.values(), "Glossary"])
+tabs = st.tabs([*POSITION_TABS.values(), "Leaderboard", "Glossary"])
 
-for tab, position in zip(tabs[:-1], POSITION_TABS):
+for tab, position in zip(tabs[:4], POSITION_TABS):
     with tab:
         render_position(position)
 
-with tabs[-1]:
+with tabs[4]:
+    st.header("Transfer Leaderboard")
+    st.write("Compare the biggest improvements and declines across positions.")
+
+    # Position selector
+    leaderboard_position = st.selectbox(
+        "Position",
+        ["All Positions", "QB", "RB", "WR", "TE"],
+        key="leaderboard_position"
+    )
+
+    # Choose statistics based on the selected position
+    if leaderboard_position == "All Positions":
+        leaderboard_metrics = [ADJ_PPA]
+        leaderboard_data = filtered.copy()
+    else:
+        leaderboard_metrics = METRICS[leaderboard_position]
+        leaderboard_data = filtered[
+            filtered["position"] == leaderboard_position
+        ].copy()
+
+    # Statistic selector
+    leaderboard_stat = st.selectbox(
+        "Statistic",
+        [metric[0] for metric in leaderboard_metrics],
+        format_func=lambda stat: next(
+            metric[1]
+            for metric in leaderboard_metrics
+            if metric[0] == stat
+        ),
+        key="leaderboard_stat"
+    )
+
+    st.divider()
+
+    # Count players before applying workload requirements
+    total_players = len(leaderboard_data)
+
+    # Apply automatic position-specific workload requirements
+    leaderboard_data = apply_workload_requirements(leaderboard_data)
+
+    eligible_players = len(leaderboard_data)
+    excluded_players = total_players - eligible_players
+
+    # Show eligibility summary
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Total Transfers", total_players)
+    col2.metric("Eligible Transfers", eligible_players)
+    col3.metric("Excluded Transfers", excluded_players)
+
+    # Explain the requirements
+    with st.expander("How do players qualify?"):
+        st.write(
+            "Players must meet the minimum workload requirement "
+            "in BOTH their season before transferring and their "
+            "first season after transferring."
+        )
+
+        st.table(pd.DataFrame({
+            "Position": ["QB", "RB", "WR", "TE"],
+            "Minimum Opportunities": [
+                "100 passing attempts",
+                "50 rushing attempts",
+                "20 receptions",
+                "10 receptions"
+            ]
+        }))
+
+        st.caption(
+            "These are provisional analytical thresholds, "
+            "not official NCAA eligibility standards."
+        )
+    # Calculate the rankings using the selected position and statistic
+    most_improved, biggest_declines = transfer_leaderboard(
+        leaderboard_data, leaderboard_stat
+    )
+
+    # Switch between improvements and declines
+    leaderboard_view = st.radio(
+        "Leaderboard",
+        ["Most Improved", "Biggest Declines"],
+        horizontal=True,
+        key="leaderboard_view"
+    )
+
+    if leaderboard_view == "Most Improved":
+        results = most_improved
+    else:
+        results = biggest_declines
+
+        # Featured player
+    if not results.empty:
+        top_player = results.iloc[0]
+
+        if leaderboard_view == "Most Improved":
+            featured_title = "TOP IMPROVEMENT"
+            featured_color = "#4ADE80"
+            featured_background = "#17271F"
+            featured_border = "#285A3B"
+        else:
+            featured_title = "BIGGEST DECLINE"
+            featured_color = "#F87171"
+            featured_background = "#2B1B20"
+            featured_border = "#6B3038"
+
+        top_change = top_player["Change"]
+
+        st.markdown(
+            f"""
+            <div style="
+                background-color: {featured_background};
+                border: 1px solid {featured_border};
+                border-radius: 12px;
+                padding: 20px 24px;
+                margin: 14px 0 22px 0;
+            ">
+                <div style="
+                    color: {featured_color};
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 1.5px;
+                    margin-bottom: 12px;
+                ">
+                    🏆 {featured_title}
+                </div>
+                <div style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 16px;
+                    flex-wrap: wrap;
+                ">
+                    <div>
+                        <div style="
+                            color: #F8FAFC;
+                            font-size: 24px;
+                            font-weight: 700;
+                        ">
+                            {top_player["name"]}
+                        </div>
+                        <div style="
+                            color: #B5C7BB;
+                            font-size: 14px;
+                            margin-top: 6px;
+                        ">
+                            {top_player["prev_team"]} → {top_player["team"]}
+                        </div>
+                    </div>
+                    <div style="
+                        color: {featured_color};
+                        font-size: 30px;
+                        font-weight: 700;
+                    ">
+                        {top_change:+.3f}
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    if results.empty:
+        st.info("No players match the selected filters.")
+    else:
+        # Get the appropriate number of decimal places
+        decimals = next(
+            metric[2]
+            for metric in leaderboard_metrics
+            if metric[0] == leaderboard_stat
+        )
+
+        # Top 10 performance change chart
+        
+        # Keep the leaderboard ranking order
+        chart_data = results.copy()
+
+        # Add ranking numbers to player names
+        chart_data["Ranked Player"] = [
+            f"{i}. {name}"
+            for i, name in enumerate(chart_data["name"], start=1)
+        ]
+
+        # Reverse only for Plotly so #1 appears at the top
+        chart_data = chart_data.iloc[::-1]
+        bar_color = (
+            "#4ADE80"
+            if leaderboard_view == "Most Improved"
+            else "#F87171"
+        )
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Bar(
+            x=chart_data["Change"],
+            y=chart_data["Ranked Player"],
+            orientation="h",
+            marker_color=bar_color,
+            text=chart_data["Change"].apply(
+                lambda x: f"{x:+.{decimals}f}"
+            ),
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate=(
+                "%{y}<br>"
+                "Performance Change: %{x:+.3f}"
+                "<extra></extra>"
+            )
+        ))
+
+        fig.update_layout(
+            title="Top 10 Performance Changes",
+            template="plotly_dark",
+            height=450,
+            margin=dict(l=10, r=75, t=55, b=30),
+            xaxis_title="Change",
+            yaxis_title=None,
+            showlegend=False,
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        display_data = results[
+            [
+                "name",
+                "position",
+                "prev_team",
+                "team",
+                f"{leaderboard_stat}_before",
+                leaderboard_stat,
+                "Change"
+            ]
+        ].copy()
+
+        # Add ranking numbers
+        display_data.insert(
+            0,
+            "Rank",
+            range(1, len(display_data) + 1)
+        )
+
+        display_data.columns = [
+            "Rank", "Player", "Position", "Previous School",
+            "New School", "Before", "After", "Change"
+        ]
+
+                # Format and color-code the performance change
+        def style_change(value):
+            if value > 0:
+                return "color: #4ADE80; font-weight: bold"
+            elif value < 0:
+                return "color: #F87171; font-weight: bold"
+            return "color: #94A3B8"
+
+        styled_data = display_data.style.map(
+            style_change,
+            subset=["Change"]
+        ).format({
+            "Before": f"{{:.{decimals}f}}",
+            "After": f"{{:.{decimals}f}}",
+            "Change": f"{{:+.{decimals}f}}",
+        })
+
+        st.dataframe(
+            styled_data,
+            hide_index=True,
+            width="stretch"
+        )
+with tabs[5]:
     st.header("Glossary")
     st.subheader("1. Performance Metrics")
     st.markdown("""
