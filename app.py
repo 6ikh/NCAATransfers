@@ -1,18 +1,14 @@
-from pathlib import Path
-
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection 
 
 # browser tab title and full-width layout
 st.set_page_config(
     page_title="NCAA Transfer Portal",
     layout="wide"
 )
-
-# player-season data for every transfer from 2021-2025
-DATA_PATH = Path(__file__).parent / "data" / "transfers_2021_2025_adj.xlsx"
 
 # conferences whose power status varies by season/team get split into two labels
 # Notre Dame = Power Indpendent
@@ -76,11 +72,13 @@ def conference_label(conference, power_conf):
     return conference
 
 
-#cache so the excel file is only read once
-@st.cache_data
+# Cache the remote sheet for one hour to limit requests while keeping updates fresh.
+@st.cache_data(ttl=3600)
 def load_transfers():
-    """One row per transfer stats after the transfer plus "_before" stats from the prior season"""
-    df = pd.read_excel(DATA_PATH, sheet_name="All")
+    """Load transfer data from the Google Sheet and pair it with prior-season stats."""
+    connection = st.connection("gsheets", type=GSheetsConnection)
+    # GSheetsConnection expects the numeric tab gid for public sheets, not its tab name.
+    df = connection.read(ttl=3600)
 
     # Treat missing counting stats as 0
     df[COUNT_COLUMNS] = df[COUNT_COLUMNS].fillna(0)
