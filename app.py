@@ -843,6 +843,256 @@ def render_leaderboard(filtered):
             width="stretch"
         )
 
+    st.divider()
+    st.subheader("Compare Two Players")
+
+    comparison_data = leaderboard_data.dropna(
+        subset=[leaderboard_stat, f"{leaderboard_stat}_before"]
+    ).copy()
+
+    comparison_data = comparison_data.reset_index(drop=True)
+
+    if len(comparison_data) < 2:
+        st.info("Not enough eligible transfers to compare.")
+    else:
+        comparison_data["Player Label"] = (
+            comparison_data["name"].astype(str)
+            + " ("
+            + comparison_data["prev_team"].astype(str)
+            + " → "
+            + comparison_data["team"].astype(str)
+            + ", "
+            + comparison_data["season"].astype(str)
+            + ")"
+        )
+
+                # Create a searchable list of eligible players
+        player_options = comparison_data.index.tolist()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            player_1_index = st.selectbox(
+                "Player 1",
+                options=player_options,
+                format_func=lambda i: comparison_data.loc[i, "Player Label"],
+                index=0,
+                placeholder="Search for Player 1",
+                key="compare_player_1"
+            )
+
+        with col2:
+            player_2_index = st.selectbox(
+                "Player 2",
+                options=player_options,
+                format_func=lambda i: comparison_data.loc[i, "Player Label"],
+                index=1,
+                placeholder="Search for Player 2",
+                key="compare_player_2"
+            )
+
+        if player_1_index == player_2_index:
+            st.warning("Please select two different players.")
+        else:
+            player_1 = comparison_data.loc[player_1_index]
+            player_2 = comparison_data.loc[player_2_index]
+
+                    # Get the selected statistic
+            before_col = f"{leaderboard_stat}_before"
+
+            # Calculate performance changes
+            player_1_change = (
+                player_1[leaderboard_stat] - player_1[before_col]
+            )
+
+            player_2_change = (
+                player_2[leaderboard_stat] - player_2[before_col]
+            )
+
+            # Create side-by-side comparison
+            comparison_table = pd.DataFrame({
+                "Statistic": [
+                    "Player",
+                    "Position",
+                    "Previous School",
+                    "New School",
+                    "Transfer Year",
+                    "Before Transfer",
+                    "After Transfer",
+                    "Change"
+                ],
+                "Player 1": [
+                    player_1["name"],
+                    player_1["position"],
+                    player_1["prev_team"],
+                    player_1["team"],
+                    player_1["season"],
+                    f"{player_1[before_col]:.{decimals}f}",
+                    f"{player_1[leaderboard_stat]:.{decimals}f}",
+                    f"{player_1_change:+.{decimals}f}"
+                ],
+                "Player 2": [
+                    player_2["name"],
+                    player_2["position"],
+                    player_2["prev_team"],
+                    player_2["team"],
+                    player_2["season"],
+                    f"{player_2[before_col]:.{decimals}f}",
+                    f"{player_2[leaderboard_stat]:.{decimals}f}",
+                    f"{player_2_change:+.{decimals}f}"
+                ]
+            })
+
+            st.markdown("#### Player Comparison")
+            st.dataframe(
+                comparison_table,
+                hide_index=True,
+                width="stretch"
+            )
+
+                        # Before-and-after player comparison chart
+            player_names = [
+            player_1["name"],
+            player_2["name"]
+            ]
+
+            fig_compare = go.Figure()
+
+            fig_compare.add_trace(go.Bar(
+                name="Before Transfer",
+                x=player_names,
+                y=[
+                    player_1[before_col],
+                    player_2[before_col]
+                ],
+                marker_color="#64748B",
+                text=[
+                    f"{player_1[before_col]:.{decimals}f}",
+                    f"{player_2[before_col]:.{decimals}f}"
+                ],
+                textposition="outside"
+            ))
+
+            fig_compare.add_trace(go.Bar(
+                name="After Transfer",
+                x=player_names,
+                y=[
+                    player_1[leaderboard_stat],
+                    player_2[leaderboard_stat]
+                ],
+                marker_color="#38BDF8",
+                text=[
+                    f"{player_1[leaderboard_stat]:.{decimals}f}",
+                    f"{player_2[leaderboard_stat]:.{decimals}f}"
+                ],
+                textposition="outside"
+            ))
+
+                        # Improve chart appearance
+            stat_label = next(
+                metric[1]
+                for metric in leaderboard_metrics
+                if metric[0] == leaderboard_stat
+            )
+
+            fig_compare.update_layout(
+                title=dict(
+                    text=f"{stat_label}: Before vs. After Transfer",
+                    font=dict(size=20, color="#F8FAFC"),
+                    x=0
+                ),
+                barmode="group",
+                template="plotly_dark",
+                height=420,
+                paper_bgcolor="#0E1117",
+                plot_bgcolor="#0E1117",
+                font=dict(
+                    family="Arial",
+                    size=14,
+                    color="#E2E8F0"
+                ),
+                xaxis=dict(
+                    title=None,
+                    showgrid=False,
+                    tickfont=dict(size=14)
+                ),
+                yaxis=dict(
+                    title=stat_label,
+                    showgrid=True,
+                    gridcolor="#29313C",
+                    zeroline=True,
+                    zerolinecolor="#64748B",
+                    tickfont=dict(size=12)
+                ),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    title=None
+                ),
+                margin=dict(l=45, r=20, t=100, b=45),
+                bargap=0.35,
+                bargroupgap=0.08,
+                hovermode="x unified"
+            )
+
+            fig_compare.update_traces(
+                textfont=dict(size=14),
+                cliponaxis=False
+            )
+
+            st.plotly_chart(
+                fig_compare,
+                width="stretch"
+            )
+
+            # Dynamic player comparison insight
+            st.markdown("#### Comparison Insight")
+
+            difference = player_1_change - player_2_change
+
+            if abs(difference) < 0.000001:
+                insight = (
+                    f"{player_1['name']} and {player_2['name']} "
+                    "experienced the same performance change."
+                )
+
+            elif difference > 0:
+                if player_1_change >= 0 and player_2_change >= 0:
+                    explanation = "improved more than"
+                elif player_1_change < 0 and player_2_change < 0:
+                    explanation = "experienced a smaller decline than"
+                else:
+                    explanation = "had a more favorable performance change than"
+
+                insight = (
+                    f"{player_1['name']} {explanation} "
+                    f"{player_2['name']}."
+                )
+
+            else:
+                if player_1_change >= 0 and player_2_change >= 0:
+                    explanation = "improved more than"
+                elif player_1_change < 0 and player_2_change < 0:
+                    explanation = "experienced a smaller decline than"
+                else:
+                    explanation = "had a more favorable performance change than"
+
+                insight = (
+                    f"{player_2['name']} {explanation} "
+                    f"{player_1['name']}."
+                )
+
+            st.info(
+                f"{insight} "
+                f"{player_1['name']} changed by "
+                f"{player_1_change:+.{decimals}f}, while "
+                f"{player_2['name']} changed by "
+                f"{player_2_change:+.{decimals}f}."
+            )
+
 
 def metrics_page():
     """conference/year filters"""
