@@ -463,48 +463,8 @@ st.title("NCAA Transfer Portal")
 
 pairs = load_transfers()
 
-# Conference options for each side split into non-power and power
-non_power_from, power_from = power_split(zip(pairs["conf_label_before"], pairs["power_conf_before"]))
-non_power_to, power_to = power_split(zip(pairs["conf_label"], pairs["power_conf"]))
 
-# Two conference pickers side by side
-side1, side2 = st.columns(2)
-with side1:
-    # Defaults to non-power conferences
-    st.subheader("Transferred from")
-    from_confs = st.multiselect(
-        "Conferences before transfer",
-        non_power_from + power_from,
-        default=non_power_from,
-        key="from_confs",
-    )
-with side2:
-    # Defaults to power conferences
-    st.subheader("Transferred to")
-    to_confs = st.multiselect(
-        "Conferences after transfer",
-        non_power_to + power_to,
-        default=power_to,
-        key="to_confs",
-    )
-
-# Transfer year filter
-years = sorted(pairs["season"].dropna().unique())
-selected_years = st.multiselect(
-    "Transfer year",
-    years,
-    default=years,
-)    
-
-# Keep only transfers between the selected conferences
-filtered = pairs[
-    pairs["conf_label_before"].isin(from_confs)
-    & pairs["conf_label"].isin(to_confs)
-    & pairs["season"].isin(selected_years)
-]
-
-
-def render_position(position):
+def render_position(position, filtered):
     """Stat picker summary numbers and chart for one position tab."""
 
     # Stat dropdown with only this position's stats
@@ -612,14 +572,9 @@ def render_position(position):
         key=f"performance_chart_{position}"
     )
 
-# Position tabs plus a glossary tab
-tabs = st.tabs([*POSITION_TABS.values(), "Leaderboard", "Glossary"])
 
-for tab, position in zip(tabs[:4], POSITION_TABS):
-    with tab:
-        render_position(position)
-
-with tabs[4]:
+def render_leaderboard(filtered):
+    """Biggest improvements and declines for the Metrics page filters."""
     st.header("Transfer Leaderboard")
     st.write("Compare the biggest improvements and declines across positions.")
 
@@ -887,7 +842,138 @@ with tabs[4]:
             hide_index=True,
             width="stretch"
         )
-with tabs[5]:
+
+
+def metrics_page():
+    """conference/year filters"""
+
+    # conference options split into non-power and power
+    non_power_from, power_from = power_split(zip(pairs["conf_label_before"], pairs["power_conf_before"]))
+    non_power_to, power_to = power_split(zip(pairs["conf_label"], pairs["power_conf"]))
+
+    # Two conference pickers side by side
+    side1, side2 = st.columns(2)
+    with side1:
+        # default to non-power conferences
+        st.subheader("Transferred from")
+        from_confs = st.multiselect(
+            "Conferences before transfer",
+            non_power_from + power_from,
+            default=non_power_from,
+            key="from_confs",
+        )
+    with side2:
+        # defaults to power conference
+        st.subheader("Transferred to")
+        to_confs = st.multiselect(
+            "Conferences after transfer",
+            non_power_to + power_to,
+            default=power_to,
+            key="to_confs",
+        )
+
+    # transfer year filter
+    years = sorted(pairs["season"].dropna().unique())
+    selected_years = st.multiselect(
+        "Transfer year",
+        years,
+        default=years,
+    )
+
+    # Keep only transfers between the selected conferences
+    filtered = pairs[
+        pairs["conf_label_before"].isin(from_confs)
+        & pairs["conf_label"].isin(to_confs)
+        & pairs["season"].isin(selected_years)
+    ]
+
+    # One tab per position plus the leaderboard
+    tabs = st.tabs([*POSITION_TABS.values(), "Leaderboard"])
+
+    for tab, position in zip(tabs[:4], POSITION_TABS):
+        with tab:
+            render_position(position, filtered)
+
+    with tabs[4]:
+        render_leaderboard(filtered)
+
+
+def index_page():
+    """Index with every team in the dataset."""
+    st.header("Team Index")
+
+    # transfers that have adjusted PPA at both schools
+    data = pairs.dropna(subset=["adjPPA", "adjPPA_before"])
+
+    # defaulting to NP -> P transfers from every season and conference
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        conferences = st.multiselect(
+            "Conference",
+            sorted(data["fbs_conference"].dropna().unique()),
+            key="index_confs",
+            placeholder="All conferences",
+        )
+    with f2:
+        directions = st.multiselect(
+            "Transfer direction",
+            ["NP->P", "P->NP", "P->P", "NP->NP"],
+            default=["NP->P"],
+            key="index_directions",
+            placeholder="All directions",
+        )
+    with f3:
+        seasons = st.multiselect(
+            "Season",
+            sorted(data["season"].dropna().unique()),
+            key="index_seasons",
+            placeholder="All seasons",
+        )
+
+    # no filter if nothing is selected
+    if conferences:
+        data = data[data["fbs_conference"].isin(conferences)]
+    if directions:
+        data = data[data["transfer_direction"].isin(directions)]
+    if seasons:
+        data = data[data["season"].isin(seasons)]
+
+    if data.empty:
+        st.info("No transfers match these filters.")
+        return
+
+    # conference and power status come from the team's most recent season in the selection
+    # this should fix the pac 12 edge case
+    data = data.assign(ppa_added=data["adjPPA"] - data["adjPPA_before"]).sort_values("season")
+    teams = (
+        data.groupby("team")
+        .agg(
+            conference=("fbs_conference", "last"),
+            power=("power_conf", "last"),
+            transfers=("id", "count"),
+            ppa_added=("ppa_added", "sum"),
+        )
+        .reset_index()
+        .sort_values("ppa_added", ascending=False)
+    )
+    teams["power"] = teams["power"].map({"Y": "Yes"}).fillna("No")
+
+    st.dataframe(
+        teams,
+        hide_index=True,
+        width="stretch",
+        height=700,
+        column_config={
+            "team": "Team",
+            "conference": "Conference",
+            "power": "Power",
+            "transfers": st.column_config.NumberColumn("Transfers"),
+            "ppa_added": st.column_config.NumberColumn("PPA Added", format="%+.3f"),
+        },
+    )
+
+
+def glossary_page():
     st.header("Glossary")
     st.subheader("1. Performance Metrics")
     st.markdown("""
@@ -933,3 +1019,16 @@ with tabs[5]:
     - **Time period:** 2021–2025
     - **Limitations:** Some players have missing statistics or limited playing time. """
     )
+
+
+# New site menu
+page = st.navigation(
+    [
+        st.Page(metrics_page, title="Metrics", url_path="metrics", default=True),
+        st.Page(index_page, title="Index", url_path="index"),
+        st.Page(glossary_page, title="Glossary", url_path="glossary"),
+
+    ],
+    position="top",
+)
+page.run()

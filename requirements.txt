@@ -2,4 +2,4 @@ pandas>=3.0
 openpyxl>=3.1
 plotly>=6.0
 kaleido>=1.0
-streamlit>=1.40
+streamlit>=1.46
