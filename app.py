@@ -293,139 +293,6 @@ def improvement_chart(data, stat, stat_name):
 
     return fig
 
-def performance_chart(data, position):
-    """Show average performance changes across transfer directions."""
-
-    from plotly.subplots import make_subplots
-
-    metrics = {
-    "QB": [
-        ("passing_ATT", "Pass Attempts", 1),
-        ("passing_YDS", "Passing Yards", 1),
-        ("passing_YPA", "Yards per Attempt", 2),
-        ("passing_TD", "Passing Touchdowns", 1),
-        ("adjPPA", "Adjusted PPA", 3),
-    ],
-    "RB": [
-        ("rushing_CAR", "Rushing Attempts", 1),
-        ("rushing_YDS", "Rushing Yards", 1),
-        ("rushing_YPC", "Yards per Carry", 2),
-        ("rushing_TD", "Rushing Touchdowns", 1),
-        ("adjPPA", "Adjusted PPA", 3),
-    ],
-    "WR": [
-        ("receiving_REC", "Receptions", 1),
-        ("receiving_YDS", "Receiving Yards", 1),
-        ("receiving_YPR", "Yards per Reception", 2),
-        ("receiving_TD", "Receiving Touchdowns", 1),
-        ("adjPPA", "Adjusted PPA", 3),
-    ],
-    "TE": [
-        ("receiving_REC", "Receptions", 1),
-        ("receiving_YDS", "Receiving Yards", 1),
-        ("receiving_YPR", "Yards per Reception", 2),
-        ("receiving_TD", "Receiving Touchdowns", 1),
-        ("adjPPA", "Adjusted PPA", 3),
-    ],
-}[position]
-
-    directions = [
-        ("NP->P", "NP → P"),
-        ("P->P", "P → P"),
-        ("P->NP", "P → NP"),
-    ]
-
-    fig = make_subplots(
-        rows=5,
-        cols=1,
-        subplot_titles=[metric[1] for metric in metrics],
-        vertical_spacing=0.10,
-    )
-
-    for row_num, (stat, label, decimals) in enumerate(metrics, 1):
-
-        for direction, direction_label in directions:
-
-            group = data[
-                data["transfer_direction"] == direction
-            ].dropna(subset=[stat, f"{stat}_before"])
-
-            if group.empty:
-                continue
-
-            change = (
-                group[stat] - group[f"{stat}_before"]
-            ).mean()
-
-            color = "#16A34A" if change > 0 else "#E63946"
-
-            fig.add_trace(
-                go.Bar(
-                    x=[change],
-                    y=[direction_label],
-                    orientation="h",
-                    marker_color=color,
-                    marker_line_width=0,
-                    width=0.45,
-                    text=[f"{change:+.{decimals}f}"],
-                    textposition="outside",
-                    cliponaxis=False,
-                    showlegend=False,
-                    hovertemplate=(
-                        f"<b>{direction_label}</b><br>"
-                        f"{label}: %{{x:+.{decimals}f}}<br>"
-                        f"Players: {len(group)}"
-                        "<extra></extra>"
-                    ),
-                ),
-                row=row_num,
-                col=1,
-            )
-
-        fig.add_vline(
-            x=0,
-            line_color="#888888",
-            line_width=1,
-            row=row_num,
-            col=1,
-        )
-
-        fig.update_yaxes(
-            categoryorder="array",
-            categoryarray=["P → NP", "P → P", "NP → P"],
-            row=row_num,
-            col=1,
-        )
-
-        fig.update_xaxes(
-            zeroline=False,
-            showgrid=False,
-            row=row_num,
-            col=1,
-        )
-
-    fig.update_layout(
-        title=dict(
-            text=f"Average {position} Performance Changes After Transferring",
-            font=dict(size=23),
-            x=0.5,
-            xanchor="center",
-        ),
-        height=950,
-        bargap=0.35,
-        margin=dict(l=90, r=100, t=100, b=35),
-        showlegend=False,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(size=13),
-    )
-
-    fig.update_annotations(
-        font=dict(size=16, color="white")
-    )
-
-    return fig
-
 def transfer_leaderboard(data, stat):
     """Find the biggest improvements and declines after transferring."""
 
@@ -543,36 +410,8 @@ def render_position(position, filtered):
     st.plotly_chart(
         hist_fig, width="stretch", key=f"hist_{position}"
     )
-    #Parm -- Average Performance Change by Transfer Direction (position)
-    if not filtered.empty:
-        # Further filter the data to include only rows for the selected position
-        position_filtered = filtered[filtered["position"] == position]
-        if not position_filtered.empty:
-            # Calculate the change in adjusted PPA (adjPPA) for each row
-            # position_filtered["adjPPA_change"] = position_filtered["adjPPA"] - position_filtered["adjPPA_before"]
-            position_filtered["stat_change"] = position_filtered[stat] - position_filtered[f"{stat}_before"]
-            # Group the data by transfer direction and calculate the average adjPPA change for each group
-            avg_stat_dir = (
-                position_filtered.groupby("transfer_direction")["stat_change"].mean().reset_index()
-                )
-    # Define selected_position
-    selected_position = position
-    st.subheader(f"Average Performance Change by Transfer Direction ({POSITION_TABS[selected_position]})")
-    fig_dir = px.bar(
-        avg_stat_dir,
-        x="transfer_direction",
-        y="stat_change",
-        labels={
-            "transfer_direction": "Transfer Direction",
-            "stat_change": f"Average {stat_name} Change",
-        },
-        color="transfer_direction",
-    )
-    # Remove legend from the bar chart
-    fig_dir.update_layout(showlegend=False)
-    # Display the bar chart in Streamlit
-    st.plotly_chart(fig_dir,width="stretch", key=f"hist_{position}_direction")
-        # Additional visualization for running backs only
+    
+    # Additional visualization for running backs only
     st.divider()
     st.subheader("Improvement vs. Decline")
 
@@ -586,16 +425,6 @@ def render_position(position, filtered):
        )
     else:
      st.info("No players match the selected filters.")
-
-    st.divider()
-    st.subheader("Performance by Metric")
-
-    st.plotly_chart(
-        performance_chart(selected, position),
-        width="stretch",
-        key=f"performance_chart_{position}"
-    )
-
 
 def render_leaderboard(filtered):
     """Biggest improvements and declines for the Metrics page filters."""
