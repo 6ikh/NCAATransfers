@@ -14,11 +14,40 @@ st.set_page_config(
 # Notre Dame = Power Indpendent
 MIXED_CONFERENCES = {"Pac-12", "FBS Independents"}
 
-# Line colors
-# blue if the player's stat went up, red if it went down
-IMPROVED_COLOR = ("dodgerblue")
-DECLINED_COLOR = "red"
+# Shared chart colors
+IMPROVED_COLOR = "#3B82F6"
+DECLINED_COLOR = "#EF4444"
+NEUTRAL_COLOR = "#94A3B8"
+BAR_COLOR = "#3B82F6"
 
+# Apply consistent formatting across Plotly charts
+def apply_chart_style(fig):
+    """Apply shared visual styling to Plotly charts."""
+
+    fig.update_layout(
+        template="plotly_dark",
+        font=dict(
+            family="Arial",
+            size=15,
+            color="#E2E8F0"
+        ),
+        title_font=dict(size=20),
+        paper_bgcolor="rgba(0, 0, 0, 0)",
+        plot_bgcolor="rgba(0, 0, 0, 0)",
+        hoverlabel=dict(font_size=13)
+    )
+
+    fig.update_xaxes(
+        title_font=dict(size=15),
+        tickfont=dict(size=15)
+    )
+
+    fig.update_yaxes(
+        title_font=dict(size=15),
+        tickfont=dict(size=15)
+    )
+
+    return fig
 
 # per-position metrics
 
@@ -167,8 +196,8 @@ def slope_chart(data, stat, stat_name, decimals):
         # Fade the lines when there are lots of players so the chart stays readable
         fig.add_trace(go.Scatter(
             x=xs, y=ys, mode="lines+markers", name=f"{label} ({len(group)})",
-            line=dict(color=color, width=1.5), marker=dict(size=8, color=color),
-            opacity=0.5 if len(data) > 40 else 1,
+            line=dict(color=color, width=1), marker=dict(size=5, color=color),
+            opacity=0.3 if len(data) > 40 else 0.7,
             hovertext=text, hoverinfo="text",
         ))
 
@@ -177,14 +206,15 @@ def slope_chart(data, stat, stat_name, decimals):
         x=["Before", "After"],
         y=[data[f"{stat}_before"].mean(), data[stat].mean()],
         mode="lines+markers", name="Group average",
-        line=dict(color="gray", width=4), marker=dict(size=12, color="gray"),
+        line=dict(color=NEUTRAL_COLOR, width=5), marker=dict(size=12, color=NEUTRAL_COLOR),
         hovertemplate=f"Average {stat_name}: %{{y:.{max(decimals, 1)}f}}<extra></extra>",
-    ))
+    ))  
 
-    # Chart size axis labels and legend position
+    # Chart title, size, axis labels, and legend position
     fig.update_layout(
+        title=f"Individual Player Performance: {stat_name}",
         height=600,
-        margin=dict(l=70, r=20, t=30, b=20),
+        margin=dict(l=70, r=20, t=70, b=20),
         xaxis=dict(
             categoryorder="array", categoryarray=["Before", "After"],
             tickvals=["Before", "After"],
@@ -192,9 +222,11 @@ def slope_chart(data, stat, stat_name, decimals):
             range=[-0.15, 1.15],
         ),
         yaxis=dict(title=dict(text=stat_name, standoff=12), automargin=True, gridcolor="rgba(128,128,128,0.2)", zeroline=False),
-        legend=dict(orientation="h", y=1.06, x=0),
+        legend=dict(orientation="h", y=1.06, x=0, font=dict(size=15)),
         hovermode="closest",
     )
+    fig = apply_chart_style(fig)
+
     return fig
 
 def improvement_chart(data, stat, stat_name):
@@ -238,10 +270,10 @@ def improvement_chart(data, stat, stat_name):
     fig = go.Figure()
 
     categories = [
-        ("Declined", "#E63946"),
-        ("Unchanged", "#9CA3AF"),
-        ("Improved", "#16A34A")
-    ]
+    ("Declined", DECLINED_COLOR),
+    ("Unchanged", NEUTRAL_COLOR),
+    ("Improved", IMPROVED_COLOR)
+]
 
     for category, color in categories:
 
@@ -264,7 +296,7 @@ def improvement_chart(data, stat, stat_name):
         ))
 
     fig.update_layout(
-        title=f"How Players Perform After Transferring: {stat_name}",
+        title=f"Performance Outcomes: {stat_name}",
         barmode="stack",
         height=380,
         xaxis=dict(
@@ -286,10 +318,13 @@ def improvement_chart(data, stat, stat_name):
         legend=dict(
             orientation="h",
             y=1.12,
-            x=0
+            x=0,
+            font=dict(size=15)
         ),
         margin=dict(l=40, r=30, t=90, b=50)
     )
+
+    fig = apply_chart_style(fig)
 
     return fig
 
@@ -350,7 +385,7 @@ def apply_workload_requirements(data):
 
     return pd.concat(eligible_groups, ignore_index=True)
 
-st.title("NCAA Transfer Portal")
+st.title("NCAA Football Transfer Portal")
 
 pairs = load_transfers()
 
@@ -400,20 +435,28 @@ def render_position(position, filtered):
     )
 
     # Show the distribution of change for the selected metric
-    hist_fig = go.Figure(data=[go.Histogram(x=change, nbinsx=20)])
-    hist_fig.add_vline(x=0, line_dash="dash", line_color="red")
+    hist_fig = go.Figure(
+    data=[go.Histogram(
+        x=change,
+        nbinsx=20,
+        marker_color=BAR_COLOR
+    )]
+)
+    hist_fig.add_vline(x=0, line_dash="dash", line_color=NEUTRAL_COLOR)
     hist_fig.update_layout(
-        title=f"Distribution of {stat_name} Change",
-        xaxis_title=f"Change in {stat_name} (after - before)",
+        title=f"Distribution of Changes: {stat_name}",
+        xaxis_title=f"Change in {stat_name}",
         yaxis_title="Number of players",
     )
+
+    hist_fig = apply_chart_style(hist_fig)
+
     st.plotly_chart(
         hist_fig, width="stretch", key=f"hist_{position}"
     )
     
     # Additional visualization for running backs only
     st.divider()
-    st.subheader("Improvement vs. Decline")
 
     fig = improvement_chart(selected, stat, stat_name)
 
@@ -1012,13 +1055,13 @@ def metrics_page():
     ]
 
     # One tab per position plus the leaderboard
-    tabs = st.tabs(["Leaderboard", *POSITION_TABS.values()])
+    tabs = st.tabs([*POSITION_TABS.values(), "Player Leaderboard"])
 
-    for tab, position in zip(tabs[1:5], POSITION_TABS):
+    for tab, position in zip(tabs[:4], POSITION_TABS):
         with tab:
             render_position(position, filtered)
 
-    with tabs[0]:
+    with tabs[4]:
         render_leaderboard(filtered)
 
 
