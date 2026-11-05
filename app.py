@@ -430,44 +430,41 @@ def render_position(position, filtered):
               f"{mean_change:+.{mean_decimals}f}")
     m5.metric(f"% Improved {stat_name}", f"{improved_pct:.1f}%")
 
-    st.plotly_chart(
-        slope_chart(selected, stat, stat_name, decimals), width="stretch", key=f"chart_{position}"
+    # switch between chart types so only one chart shows at a time
+    chart_type = st.radio(
+        "Chart",
+        ["Before vs. After", "Distribution of Changes", "Improved vs. Declined"],
+        horizontal=True,
+        key=f"chart_type_{position}"
     )
 
-    # Show the distribution of change for the selected metric
-    hist_fig = go.Figure(
-    data=[go.Histogram(
-        x=change,
-        nbinsx=20,
-        marker_color=BAR_COLOR
-    )]
-)
-    hist_fig.add_vline(x=0, line_dash="dash", line_color=NEUTRAL_COLOR)
-    hist_fig.update_layout(
-        title=f"Distribution of Changes: {stat_name}",
-        xaxis_title=f"Change in {stat_name}",
-        yaxis_title="Number of players",
-    )
+    if chart_type == "Before vs. After":
+        fig = slope_chart(selected, stat, stat_name, decimals)
 
-    hist_fig = apply_chart_style(hist_fig)
+    elif chart_type == "Distribution of Changes":
+        # Show the distribution of change for the selected metric
+        fig = go.Figure(
+            data=[go.Histogram(
+                x=change,
+                nbinsx=20,
+                marker_color=BAR_COLOR
+            )]
+        )
+        fig.add_vline(x=0, line_dash="dash", line_color=NEUTRAL_COLOR)
+        fig.update_layout(
+            title=f"Distribution of Changes: {stat_name}",
+            xaxis_title=f"Change in {stat_name}",
+            yaxis_title="Number of players",
+        )
+        fig = apply_chart_style(fig)
 
-    st.plotly_chart(
-        hist_fig, width="stretch", key=f"hist_{position}"
-    )
-    
-    # Additional visualization for running backs only
-    st.divider()
-
-    fig = improvement_chart(selected, stat, stat_name)
+    else:
+        fig = improvement_chart(selected, stat, stat_name)
 
     if fig is not None:
-        st.plotly_chart(
-            fig,
-            width="stretch",
-            key=f"improvement_chart_{position}"
-       )
+        st.plotly_chart(fig, width="stretch", key=f"chart_{position}")
     else:
-     st.info("No players match the selected filters.")
+        st.info("No players match the selected filters.")
 
 def render_leaderboard(filtered):
     """Biggest improvements and declines for the Metrics page filters."""
