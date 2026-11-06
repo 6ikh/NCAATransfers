@@ -385,6 +385,38 @@ def apply_workload_requirements(data):
 
     return pd.concat(eligible_groups, ignore_index=True)
 
+def biggest_transfer_by_season(data, stat):
+    """Find the biggest positive performance change in each transfer season."""
+
+    seasonal_data = data.dropna(
+        subset=["season", stat, f"{stat}_before"]
+    ).copy()
+
+    # Calculate each player's change after transferring
+    seasonal_data["Change"] = (
+        seasonal_data[stat] - seasonal_data[f"{stat}_before"]
+    )
+
+    # Only consider players whose statistic improved
+    seasonal_data = seasonal_data[
+        seasonal_data["Change"] > 0
+    ]
+
+    if seasonal_data.empty:
+        return seasonal_data
+
+    # Sort from the largest improvement to the smallest
+    seasonal_data = seasonal_data.sort_values(
+        "Change", ascending=False
+    )
+
+    # Keep the biggest improvement from each season
+    seasonal_winners = seasonal_data.drop_duplicates(
+        subset=["season"], keep="first"
+    )
+
+    return seasonal_winners.sort_values("season")
+
 st.title("NCAA Football Transfer Portal")
 
 pairs = load_transfers()
@@ -499,6 +531,7 @@ def render_leaderboard(filtered):
         ),
         key="leaderboard_stat"
     )
+
 
     st.divider()
 
@@ -1004,6 +1037,153 @@ def render_leaderboard(filtered):
                 f"{player_2['name']} changed by "
                 f"{player_2_change:+.{decimals}f}."
             )
+
+
+    # Biggest transfer success by season
+    st.divider()
+    st.subheader("Biggest Transfer Success by Season (2022–2025)")
+
+    st.write(
+        "The player with the largest improvement in the selected "
+        "statistic for each transfer season."
+    )
+
+    # Use the already-filtered and workload-eligible players
+    seasonal_winners = biggest_transfer_by_season(
+        leaderboard_data, leaderboard_stat
+    )
+
+    if seasonal_winners.empty:
+        st.info("No qualifying improvements match the selected filters.")
+
+    else:
+        # Get the statistic's display name and decimal formatting
+        stat_name, decimals = next(
+            (label, decimals)
+            for col, label, decimals in leaderboard_metrics
+            if col == leaderboard_stat
+        )
+
+        
+        # Prepare the seasonal winners table
+        seasonal_table = seasonal_winners[
+            [
+                "season", "name", "position",
+                "prev_team", "team",
+                f"{leaderboard_stat}_before",
+                leaderboard_stat, "Change"
+            ]
+        ].copy()
+
+        seasonal_table.columns = [
+            "Season", "Player", "Position",
+            "Previous School", "New School",
+            f"Before {stat_name}",
+            f"After {stat_name}",
+            "Change"
+        ]
+
+        # Highlight the strongest improvement
+        highest_change = seasonal_table["Change"].max()
+
+        def highlight_seasonal_change(value):
+            if value == highest_change:
+                return (
+                    "background-color: #163B2B; "
+                    "color: #4ADE80; font-weight: bold"
+                )
+            return "color: #4ADE80; font-weight: bold"
+
+        styled_seasonal = (
+            seasonal_table.style
+            .map(highlight_seasonal_change, subset=["Change"])
+            .format({
+                f"Before {stat_name}": f"{{:.{decimals}f}}",
+                f"After {stat_name}": f"{{:.{decimals}f}}",
+                "Change": f"{{:+.{decimals}f}}"
+            })
+        )
+
+        st.dataframe(
+            styled_seasonal,
+            hide_index=True,
+            width="stretch",
+            row_height=42
+        )
+
+        # Create a chart with player names and seasons
+        chart_data = seasonal_winners.copy()
+        chart_data["Label"] = (
+            chart_data["name"].astype(str)
+            + "<br>"
+            + chart_data["season"].astype(int).astype(str)
+        )
+
+        highest_change = chart_data["Change"].max()
+
+        chart_colors = [
+            "#4ADE80" if value == highest_change else "#3B82F6"
+            for value in chart_data["Change"]
+        ]
+
+        fig_season = go.Figure()
+
+        fig_season.add_trace(go.Bar(
+            x=chart_data["Label"],
+            y=chart_data["Change"],
+            marker=dict(
+                color=chart_colors,
+                line=dict(width=0)
+            ),
+            text=chart_data["Change"].apply(
+                lambda value: f"{value:+.{decimals}f}"
+            ),
+            textposition="outside",
+            textfont=dict(size=16, color="#F8FAFC"),
+            cliponaxis=False,
+            customdata=chart_data[
+                ["name", "prev_team", "team", "season"]
+            ].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "%{customdata[1]} → %{customdata[2]}<br>"
+                "Season: %{customdata[3]}<br>"
+                "Improvement: %{y:+.3f}"
+                "<extra></extra>"
+            )
+        ))
+
+        fig_season.update_layout(
+            title=dict(
+                text=f"Top {stat_name} Improvement by Season",
+                font=dict(size=21),
+                x=0
+            ),
+            xaxis=dict(
+                title=None,
+                type="category",
+                showgrid=False,
+                tickfont=dict(size=13)
+            ),
+            yaxis=dict(
+                title=f"Change in {stat_name}",
+                gridcolor="rgba(148,163,184,0.15)",
+                zeroline=False,
+                rangemode="tozero"
+            ),
+            height=440,
+            bargap=0.35,
+            margin=dict(l=55, r=25, t=75, b=70),
+            showlegend=False
+        )
+
+        fig_season = apply_chart_style(fig_season)
+
+        st.plotly_chart(
+            fig_season,
+            width="stretch",
+            key="seasonal_winners_chart"
+        )
 
 
 def metrics_page():
