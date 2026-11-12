@@ -1381,40 +1381,43 @@ def glossary_page():
 
 def player_profiles():
     st.header("Player Profiles")
-    st.write("Search for a player to view their detailed stats and performance trends.")
+    st.write("Search for a player to view their detailed stats, personal information, and performance trends.")
 
-    data = pairs.dropna(subset=["adjPPA", "adjPPA_before"])
+    if 'pairs' not in globals():
+        st.error("The 'pairs' DataFrame is not defined.")
+        return
 
-    player_names = data["name"].dropna().unique()
+    # Dropdown for Player Selection
+    player_names = pairs["name"].dropna().unique()
     player_name = st.selectbox("Select Player Name", options=player_names, index=0)
 
     if player_name:
-        player_data = data[data["name"] == player_name]
+        player_data = pairs[pairs["name"] == player_name]
 
         if not player_data.empty:
-            player_position = player_data["position"].iloc[0]
+            # Placeholder for Personal Information
+            st.subheader(f"Personal Information for {player_name}")
+            st.write("This section will include personal details like hometown, high school, and birth date")
 
-            position_metrics = {
-                "QB": ["passing_YDS", "passing_ATT", "passing_YPA"],
-                "RB": ["rushing_YDS", "rushing_ATT", "rushing_TD"],
-                "WR": ["receiving_YDS", "receiving_REC", "receiving_TD"],
-                "TE": ["receiving_YDS", "receiving_REC", "receiving_TD"],
-            }
 
-            metrics = position_metrics.get(player_position, [])
-
-            st.subheader(f"Stats for {player_name} ({player_position})")
+            st.subheader(f"Stats for {player_name}")
             st.dataframe(player_data)
 
             st.subheader("Performance Trends")
+            metrics = ["passing_YDS", "rushing_YDS", "receiving_YDS"]
             for metric in metrics:
                 if metric in player_data.columns:
+                    if len(player_data["season"].unique()) < 1:
+                        st.warning(f"Not enough data to plot {metric} over time for {player_name}.")
+                        continue
+
+                    player_data = player_data.sort_values(by="season")
                     fig = px.line(
                         player_data,
                         x="season",
                         y=metric,
                         title=f"{metric} Over Time",
-                        labels={"Year": "Year", metric: metric},
+                        labels={"season": "Season", metric: metric},
                     )
                     st.plotly_chart(fig)
         else:
