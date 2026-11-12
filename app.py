@@ -20,6 +20,9 @@ DECLINED_COLOR = "#EF4444"
 NEUTRAL_COLOR = "#94A3B8"
 BAR_COLOR = "#3B82F6"
 
+# Table height that shows the top 10 by default but is scrollable
+TEN_ROW_HEIGHT = 35 * 11 + 3
+
 # Apply consistent formatting across Plotly charts
 def apply_chart_style(fig):
     """Apply shared visual styling to Plotly charts."""
@@ -499,9 +502,7 @@ def render_position(position, filtered):
         st.info("No players match the selected filters.")
 
 def render_leaderboard(filtered):
-    """Biggest improvements and declines for the Metrics page filters."""
-    st.header("Transfer Leaderboard")
-    st.write("Compare the biggest improvements and declines across positions.")
+    """Biggest improvements and declines for the Index page filters."""
 
     # Position selector
     leaderboard_position = st.selectbox(
@@ -532,14 +533,86 @@ def render_leaderboard(filtered):
         key="leaderboard_stat"
     )
 
-
-    st.divider()
+    # show name and decimal places for the selected stats
+    stat_label, decimals = next(
+        (label, places)
+        for col, label, places in leaderboard_metrics
+        if col == leaderboard_stat
+    )
 
     # Count players before applying workload requirements
     total_players = len(leaderboard_data)
 
     # Apply automatic position-specific workload requirements
     leaderboard_data = apply_workload_requirements(leaderboard_data)
+
+    # every eligible player ranked by change
+    ranked = leaderboard_data.dropna(
+        subset=[leaderboard_stat, f"{leaderboard_stat}_before"]
+    ).copy()
+    ranked["Change"] = ranked[leaderboard_stat] - ranked[f"{leaderboard_stat}_before"]
+    ranked = ranked.sort_values("Change", ascending=False)
+
+    if ranked.empty:
+        st.info("No players match the selected filters.")
+    else:
+        display_data = ranked[
+            [
+                "name",
+                "position",
+                "prev_team",
+                "team",
+                f"{leaderboard_stat}_before",
+                leaderboard_stat,
+                "Change"
+            ]
+        ].copy()
+
+        # Add ranking numbers
+        display_data.insert(0, "Rank", range(1, len(display_data) + 1))
+
+        #shorter labels for the table
+        stat_short = {
+            "passing_YPA": "YPA",
+            "rushing_YPC": "YPC",
+            "receiving_YPR": "YPR",
+            "adjPPA": "Adj. PPA",
+        }.get(leaderboard_stat, stat_label)
+
+        before_label = f"Before {stat_short}"
+        after_label = f"After {stat_short}"
+        change_label = f"{stat_short} Change"
+
+        display_data.columns = [
+            "Rank", "Player", "Position", "Previous School",
+            "New School", before_label, after_label, change_label
+        ]
+
+        #formatting
+        def style_change(value):
+            if value > 0:
+                return "color: #4ADE80; font-weight: bold"
+            elif value < 0:
+                return "color: #F87171; font-weight: bold"
+            return "color: #94A3B8"
+
+        styled_data = display_data.style.map(
+            style_change,
+            subset=[change_label]
+        ).format({
+            before_label: f"{{:.{decimals}f}}",
+            after_label: f"{{:.{decimals}f}}",
+            change_label: f"{{:+.{decimals}f}}",
+        })
+
+        st.dataframe(
+            styled_data,
+            hide_index=True,
+            width="stretch",
+            height=TEN_ROW_HEIGHT
+        )
+
+    st.divider()
 
     eligible_players = len(leaderboard_data)
     excluded_players = total_players - eligible_players
@@ -665,13 +738,6 @@ def render_leaderboard(filtered):
     if results.empty:
         st.info("No players match the selected filters.")
     else:
-        # Get the appropriate number of decimal places
-        decimals = next(
-            metric[2]
-            for metric in leaderboard_metrics
-            if metric[0] == leaderboard_stat
-        )
-
         # Top 10 performance change chart
         
         # Keep the leaderboard ranking order
@@ -721,72 +787,6 @@ def render_leaderboard(filtered):
         )
 
         st.plotly_chart(fig, use_container_width=True)
-
-        display_data = results[
-            [
-                "name",
-                "position",
-                "prev_team",
-                "team",
-                f"{leaderboard_stat}_before",
-                leaderboard_stat,
-                "Change"
-            ]
-        ].copy()
-
-        # Add ranking numbers
-        display_data.insert(
-            0,
-            "Rank",
-            range(1, len(display_data) + 1)
-        )
-
-        # Get the selected statistic's display name
-        stat_label = next(
-            metric[1]
-            for metric in leaderboard_metrics
-            if metric[0] == leaderboard_stat
-        )
-
-        # Use shorter labels for the table
-        stat_short = {
-            "passing_YPA": "YPA",
-            "rushing_YPC": "YPC",
-            "receiving_YPR": "YPR",
-            "adjPPA": "Adj. PPA",
-        }.get(leaderboard_stat, stat_label)
-
-        before_label = f"Before {stat_short}"
-        after_label = f"After {stat_short}"
-        change_label = f"{stat_short} Change"
-
-        display_data.columns = [
-            "Rank", "Player", "Position", "Previous School",
-            "New School", before_label, after_label, change_label
-        ]
-
-        # Format and color-code the performance change
-        def style_change(value):
-            if value > 0:
-                return "color: #4ADE80; font-weight: bold"
-            elif value < 0:
-                return "color: #F87171; font-weight: bold"
-            return "color: #94A3B8"
-
-        styled_data = display_data.style.map(
-            style_change,
-            subset=[change_label]
-        ).format({
-            before_label: f"{{:.{decimals}f}}",
-            after_label: f"{{:.{decimals}f}}",
-            change_label: f"{{:+.{decimals}f}}",
-        })
-
-        st.dataframe(
-            styled_data,
-            hide_index=True,
-            width="stretch"
-        )
 
     st.divider()
     st.subheader("Compare Two Players")
@@ -1231,23 +1231,27 @@ def metrics_page():
         & pairs["season"].isin(selected_years)
     ]
 
-    # One tab per position plus the leaderboard
-    tabs = st.tabs([*POSITION_TABS.values(), "Player Leaderboard"])
+    # one tab per position
+    tabs = st.tabs(list(POSITION_TABS.values()))
 
-    for tab, position in zip(tabs[:4], POSITION_TABS):
+    for tab, position in zip(tabs, POSITION_TABS):
         with tab:
             render_position(position, filtered)
 
-    with tabs[4]:
-        render_leaderboard(filtered)
-
 
 def index_page():
-    """Index with every team in the dataset."""
-    st.header("Team Index")
+    """Team and player index"""
+    st.header("Index")
 
-    # transfers that have adjusted PPA at both schools
-    data = pairs.dropna(subset=["adjPPA", "adjPPA_before"])
+    # switch between the team index and the player leaderboard
+    view = st.radio(
+        "View",
+        ["Teams", "Players"],
+        horizontal=True,
+        key="index_view",
+    )
+
+    data = pairs
 
     # defaulting to NP -> P transfers from every season and conference
     f1, f2, f3 = st.columns(3)
@@ -1286,6 +1290,17 @@ def index_page():
         st.info("No transfers match these filters.")
         return
 
+    if view == "Players":
+        render_leaderboard(data)
+        return
+
+    # transfers that have adjusted PPA at both schools
+    data = data.dropna(subset=["adjPPA", "adjPPA_before"])
+
+    if data.empty:
+        st.info("No transfers match these filters.")
+        return
+
     # conference and power status come from the team's most recent season in the selection
     # this should fix the pac 12 edge case
     data = data.assign(ppa_added=data["adjPPA"] - data["adjPPA_before"]).sort_values("season")
@@ -1306,7 +1321,7 @@ def index_page():
         teams,
         hide_index=True,
         width="stretch",
-        height=700,
+        height=TEN_ROW_HEIGHT,
         column_config={
             "team": "Team",
             "conference": "Conference",
