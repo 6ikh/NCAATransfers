@@ -1379,6 +1379,46 @@ def glossary_page():
     - **Limitations:** Some players have missing statistics or limited playing time. """
     )
 
+def player_profiles():
+    st.header("Player Profiles")
+    st.write("Search for a player to view their detailed stats and performance trends.")
+
+    data = pairs.dropna(subset=["adjPPA", "adjPPA_before"])
+
+    player_names = data["name"].dropna().unique()
+    player_name = st.selectbox("Select Player Name", options=player_names, index=0)
+
+    if player_name:
+        player_data = data[data["name"] == player_name]
+
+        if not player_data.empty:
+            player_position = player_data["position"].iloc[0]
+
+            position_metrics = {
+                "QB": ["passing_YDS", "passing_ATT", "passing_YPA"],
+                "RB": ["rushing_YDS", "rushing_ATT", "rushing_TD"],
+                "WR": ["receiving_YDS", "receiving_REC", "receiving_TD"],
+                "TE": ["receiving_YDS", "receiving_REC", "receiving_TD"],
+            }
+
+            metrics = position_metrics.get(player_position, [])
+
+            st.subheader(f"Stats for {player_name} ({player_position})")
+            st.dataframe(player_data)
+
+            st.subheader("Performance Trends")
+            for metric in metrics:
+                if metric in player_data.columns:
+                    fig = px.line(
+                        player_data,
+                        x="season",
+                        y=metric,
+                        title=f"{metric} Over Time",
+                        labels={"Year": "Year", metric: metric},
+                    )
+                    st.plotly_chart(fig)
+        else:
+            st.warning(f"No data available for {player_name}.")
 
 # New site menu
 page = st.navigation(
@@ -1386,6 +1426,7 @@ page = st.navigation(
         st.Page(metrics_page, title="Metrics", url_path="metrics", default=True),
         st.Page(index_page, title="Index", url_path="index"),
         st.Page(glossary_page, title="Glossary", url_path="glossary"),
+        st.Page(player_profiles, title="Player Profiles", url_path="player-profiles"),
 
     ],
     position="top",
