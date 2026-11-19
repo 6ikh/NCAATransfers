@@ -465,6 +465,20 @@ def render_position(position, filtered):
               f"{mean_change:+.{mean_decimals}f}")
     m5.metric(f"% Improved {stat_name}", f"{improved_pct:.1f}%")
 
+    # pick individual players to show on the chart (all players if none picked)
+    player_rows = st.multiselect(
+        "Players",
+        selected.sort_values("name").index,
+        format_func=lambda i: f"{selected.at[i, 'name']} ({selected.at[i, 'prev_team']} → {selected.at[i, 'team']}, {selected.at[i, 'season']})",
+        key=f"players_{position}",
+        placeholder="All players",
+    )
+    if player_rows:
+        selected = selected.loc[player_rows]
+        change = change.loc[player_rows]
+
+    chart_area = st.container()
+
     # switch between chart types so only one chart shows at a time
     chart_type = st.radio(
         "Chart",
@@ -496,10 +510,11 @@ def render_position(position, filtered):
     else:
         fig = improvement_chart(selected, stat, stat_name)
 
-    if fig is not None:
-        st.plotly_chart(fig, width="stretch", key=f"chart_{position}")
-    else:
-        st.info("No players match the selected filters.")
+    with chart_area:
+        if fig is not None:
+            st.plotly_chart(fig, width="stretch", key=f"chart_{position}")
+        else:
+            st.info("No players match the selected filters.")
 
 def render_leaderboard(filtered):
     """Biggest improvements and declines for the Index page filters."""
