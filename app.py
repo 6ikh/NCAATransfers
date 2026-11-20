@@ -1394,47 +1394,176 @@ def glossary_page():
     - **Limitations:** Some players have missing statistics or limited playing time. """
     )
 
-def player_profiles():
-    st.header("Player Profiles")
-    st.write("Search for a player to view their detailed stats, personal information, and performance trends.")
+@st.cache_data
+def load_player_info():
+    """Load player bio/hometown data from the local Excel file."""
+    df = pd.read_excel("data/cfbd_players_2021_2025.xlsx")
+    df["id"] = df["id"].astype(str)
 
-    if 'pairs' not in globals():
+    # Normalize column names in case CFBD returned camelCase or snake_case
+    rename_map = {
+        "homeCity": "home_city",
+        "homeState": "home_state",
+        "homeCountry": "home_country",
+        "firstName": "first_name",
+        "lastName": "last_name",
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+    return df
+
+
+def player_profiles():
+
+    if "pairs" not in globals():
         st.error("The 'pairs' DataFrame is not defined.")
         return
 
+    players_df = load_player_info()
+    # --- US State Choropleth Map ---
+    #st.subheader("US State Choropleth Map")
+    #st.write("Explore where transferring players come from by home state.")
+
+    if "home_state" not in players_df.columns:
+        st.error("The 'home_state' column is missing from cfbd_players_2021_2025.xlsx.")
+        return
+
+    pairs_with_state = pairs.copy()
+    pairs_with_state["id"] = pairs_with_state["id"].astype(str)
+    pairs_with_state = pairs_with_state.merge(
+        players_df[["id", "home_state"]].drop_duplicates(subset=["id"]),
+            on="id",
+            how="left",
+        )
+    pairs_with_state["state"] = pairs_with_state["home_state"].astype(str).str.strip().str.upper()
+    valid_states = pairs_with_state[pairs_with_state["state"].str.match(r"^[A-Z]{2}$", na=False)]
+
+    state_data = valid_states.groupby("state").agg(
+        total_transfers=("id", "count"),
+        np_to_p_transfers=("transfer_direction", lambda s: (s == "NP->P").sum()),
+        avg_adj_ppa_change=("adjPPA", lambda s: (s - valid_states.loc[s.index, "adjPPA_before"]).mean()),
+        top_position=("position", lambda x: x.mode().iloc[0] if not x.mode().empty else "N/A"),
+    ).reset_index()
+
+    fig_map = px.choropleth(
+        state_data,
+        locations="state",
+        locationmode="USA-states",
+        color="total_transfers",
+        hover_name="state",
+        hover_data={
+            "total_transfers": True,
+            "np_to_p_transfers": True,
+            "avg_adj_ppa_change": ":.3f",
+            "top_position": True,
+            "state": False,
+            },
+        scope="usa",
+        title="NCAA Transfer Volume by Player Home State (2021–2025)",
+        color_continuous_scale="Viridis",
+        )
+    fig_map = apply_chart_style(fig_map)
+    st.plotly_chart(fig_map, use_container_width=True)
+
+    st.header("Player Profiles")
+    st.write("Search for a player to view their detailed stats, personal information, and performance trends.")
+
+
     # Dropdown for Player Selection
-    player_names = pairs["name"].dropna().unique()
+    player_names = sorted(pairs["name"].dropna().unique())
     player_name = st.selectbox("Select Player Name", options=player_names, index=0)
 
     if player_name:
-        player_data = pairs[pairs["name"] == player_name]
+        player_data = pairs[pairs["name"] == player_name].copy()
 
         if not player_data.empty:
-            # Placeholder for Personal Information
+            # --- Personal Information ---
             st.subheader(f"Personal Information for {player_name}")
-            st.write("This section will include personal details like hometown, high school, and birth date")
 
+            player_id = str(player_data["id"].iloc[0])
+            bio_match = players_df[players_df["id"] == player_id]
+
+            if not bio_match.empty:
+                bio = bio_match.iloc[0]
+
+                city = bio.get("home_city", "")
+                state = bio.get("home_state", "")
+                hometown = ", ".join(
+                    str(x) for x in [city, state] if pd.notna(x) and str(x).strip()
+                ) or "N/A"
+
+                ht = bio.get("height")
+                height_str = f"{int(ht) // 12}'{int(ht) % 12}\"" if pd.notna(ht) else "N/A"
+                weight_str = f"{int(bio['weight'])} lbs" if pd.notna(bio.get("weight")) else "N/A"
+                jersey_str = f"#{int(bio['jersey'])}" if pd.notna(bio.get("jersey")) else "N/A"
+
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Hometown", hometown)
+                c2.metric("Height", height_str)
+                c3.metric("Weight", weight_str)
+                c4.metric("Jersey", jersey_str)
+            else:
+                st.info("No biographical record found in the roster dataset for this player.")
+
+            # --- Stats Table ---
+            stats_to_show = [
+                "season",
+                "team",
+                "transfer_direction",
+                "usage_overall",
+                "adjPPA",
+                "passing_YDS",
+                "passing_TD",
+                "rushing_YDS",
+                "rushing_TD",
+                "receiving_REC",
+                "receiving_YDS",
+                "receiving_TD",
+            ]
+            available_stats = [
+                col for col in stats_to_show if col in player_data.columns
+            ]
 
             st.subheader(f"Stats for {player_name}")
-            st.dataframe(player_data)
+            st.dataframe(
+                player_data[available_stats],
+                hide_index=True,
+                use_container_width=True,
+            )
 
+            # --- Performance Trends ---
             st.subheader("Performance Trends")
             metrics = ["passing_YDS", "rushing_YDS", "receiving_YDS"]
-            for metric in metrics:
-                if metric in player_data.columns:
-                    if len(player_data["season"].unique()) < 1:
-                        st.warning(f"Not enough data to plot {metric} over time for {player_name}.")
-                        continue
 
-                    player_data = player_data.sort_values(by="season")
-                    fig = px.line(
-                        player_data,
-                        x="season",
-                        y=metric,
-                        title=f"{metric} Over Time",
-                        labels={"season": "Season", metric: metric},
-                    )
-                    st.plotly_chart(fig)
+            for metric in metrics:
+                if metric not in player_data.columns:
+                    st.info(f"{metric} is not available for {player_name}.")
+                    continue
+
+                trend_data = player_data[["season", metric]].copy()
+                trend_data["season"] = pd.to_numeric(
+                    trend_data["season"], errors="coerce"
+                )
+                trend_data[metric] = pd.to_numeric(
+                    trend_data[metric], errors="coerce"
+                )
+                trend_data = trend_data.dropna(subset=["season", metric])
+
+                if trend_data.empty:
+                    st.info(f"No usable {metric} data to plot for {player_name}.")
+                    continue
+
+                trend_data = trend_data.sort_values(by="season")
+                fig = px.line(
+                    trend_data,
+                    x="season",
+                    y=metric,
+                    title=f"{metric} Over Time",
+                    labels={"season": "Season", metric: metric},
+                    markers=True,
+                )
+                fig = apply_chart_style(fig)
+                st.plotly_chart(fig, use_container_width=True)
+
         else:
             st.warning(f"No data available for {player_name}.")
 
