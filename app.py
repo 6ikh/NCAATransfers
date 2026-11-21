@@ -1511,12 +1511,14 @@ def player_profiles():
                 height_str = f"{int(ht) // 12}'{int(ht) % 12}\"" if pd.notna(ht) else "N/A"
                 weight_str = f"{int(bio['weight'])} lbs" if pd.notna(bio.get("weight")) else "N/A"
                 jersey_str = f"#{int(bio['jersey'])}" if pd.notna(bio.get("jersey")) else "N/A"
+                position_str = bio.get("position", "N/A")
 
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5= st.columns(5)
                 c1.metric("Hometown", hometown)
                 c2.metric("Height", height_str)
                 c3.metric("Weight", weight_str)
                 c4.metric("Jersey", jersey_str)
+                c5.metric("Position", position_str)
             else:
                 st.info("No biographical record found in the roster dataset for this player.")
 
